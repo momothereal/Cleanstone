@@ -34,7 +34,7 @@ public class SimpleCommandCompletion implements CommandCompletion {
 
     @Async
     @Override
-    public void completeCommandLine(String commandLine, Player sender, Vector lookedAtBlock) {
+    public void completeCommandLine(int transactionId, String commandLine, Player sender, Vector lookedAtBlock) {
         Preconditions.checkNotNull(commandLine, "commandLine cannot be null");
         Preconditions.checkNotNull(sender, "sender cannot be null");
 
@@ -47,13 +47,15 @@ public class SimpleCommandCompletion implements CommandCompletion {
                 return;
             }
 
-            List<String> matches = completeCommand(commandMessage.getCommandName());
-            sender.sendPacket(new OutTabCompletePacket(matches));
+            List<CompletionMatch> matches = completeCommand(commandMessage.getCommandName());
+            sender.sendPacket(new OutTabCompletePacket(transactionId, 0, commandLine.length(), matches));
             return;
         }
 
-        List<String> matches = completeParameter(commandMessage, command);
-        sender.sendPacket(new OutTabCompletePacket(matches));
+        int start = commandLine.endsWith(" ") ? commandLine.length() : commandLine.lastIndexOf(" ") + 1;
+        int length = commandLine.endsWith(" ") ? 0 : commandLine.length() - start;
+        List<CompletionMatch> matches = completeParameter(commandMessage, command);
+        sender.sendPacket(new OutTabCompletePacket(transactionId, start, length, matches));
     }
 
     private boolean usedByAlias(Command command, CommandMessage commandMessage) {
@@ -61,7 +63,7 @@ public class SimpleCommandCompletion implements CommandCompletion {
                 && !commandMessage.getFullMessage().contains(" "); // still completing command name not a parameter
     }
 
-    private List<String> completeCommand(String input) {
+    private List<CompletionMatch> completeCommand(String input) {
         String lowerCaseInput = input.toLowerCase(Locale.ENGLISH);
         List<Command> matchingCommands = commandRegistry.getAllCommands().stream()
                 .filter(command -> filteredCommandNames(command, lowerCaseInput).findAny().isPresent()) // command has matching name or alias
@@ -71,6 +73,7 @@ public class SimpleCommandCompletion implements CommandCompletion {
 
         return matchingCommands.stream()
                 .map(command -> getCommandCompletionString(command, multipleMatches, lowerCaseInput))
+                .map(CompletionMatch::new)
                 .collect(Collectors.toList());
     }
 
@@ -89,7 +92,7 @@ public class SimpleCommandCompletion implements CommandCompletion {
                 .filter(name -> name.startsWith(filter));
     }
 
-    private <T> List<String> completeParameter(CommandMessage commandMessage, Command command) {
+    private <T> List<CompletionMatch> completeParameter(CommandMessage commandMessage, Command command) {
         List<String> parameterValues = new LinkedList<>(commandMessage.getParameters());
         int lastParameterIndex = parameterValues.size() - 1;
 
